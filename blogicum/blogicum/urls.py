@@ -7,7 +7,6 @@ from django.views.generic.edit import CreateView
 
 
 urlpatterns = [
-    path('', include('blog.urls')),
     path('admin/', admin.site.urls),
     path('pages/', include('pages.urls')),
     path(
@@ -20,7 +19,13 @@ urlpatterns = [
         name='registration',
     ),
     path('auth/', include('django.contrib.auth.urls')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    path('', include('blog.urls')),
+]
+
+if settings.DEBUG:
+    urlpatterns += static(
+        settings.MEDIA_URL, document_root=settings.MEDIA_ROOT
+    )
 
 handler404 = 'pages.views.page_not_found'
 handler403 = 'pages.views.csrf_failure'

@@ -1,12 +1,13 @@
 from django import forms
 from django.forms import DateTimeInput
+
 from .models import Comment, Post, User
 
 
 class PostForm(forms.ModelForm):
     class Meta:
         model = Post
-        exclude = ['author', 'is_published']
+        exclude = ['author']
         widgets = {
             'pub_date': DateTimeInput(
                 attrs={
@@ -20,6 +21,14 @@ class CommentForm(forms.ModelForm):
     class Meta:
         model = Comment
         fields = ['text', ]
+        widgets = {
+            'text': forms.Textarea(
+                attrs={
+                    'cols': 10,
+                    'rows': 20
+                }
+            ),
+        }
 
 
 class UserUpdateForm(forms.ModelForm):

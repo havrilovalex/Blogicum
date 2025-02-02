@@ -5,7 +5,6 @@ from blog import views
 app_name = 'blog'
 
 urlpatterns = [
-    path('', views.IndexListView.as_view(), name='index'),
     path(
         'posts/<int:pk>/',
         views.PostDetailView.as_view(),
@@ -27,7 +26,7 @@ urlpatterns = [
         name='delete_post'
     ),
     path(
-        'posts/<int:pk>/comment',
+        'posts/<int:pk>/comment/',
         views.CommentCreateView.as_view(),
         name='add_comment'
     ),
@@ -51,8 +50,9 @@ urlpatterns = [
         name='edit_profile'
     ),
     path(
-        'profile/<slug:user_name>/',
+        'profile/<str:user_name>/',
         views.ProfileListView.as_view(),
         name='profile'
     ),
+    path('', views.IndexListView.as_view(), name='index'),
 ]

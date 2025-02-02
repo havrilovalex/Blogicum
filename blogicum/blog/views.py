@@ -1,28 +1,17 @@
 from django.contrib.auth.mixins import (
-    LoginRequiredMixin, UserPassesTestMixin, PermissionRequiredMixin)
-from django.db.models import Count
+    LoginRequiredMixin, PermissionRequiredMixin)
 from django.http import Http404
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
+from django.utils.timezone import now
 from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView)
 
-
 from blog.forms import CommentForm, PostForm, UserUpdateForm
+from blog.mixins import OnlyAuthorMixin
 from blog.models import Category, Comment, Post, User
 from blog.utils import detailed_post_permission, get_post_info
 from constants import QNT_POSTS_ON_MAIN
-
-
-class OnlyAuthorMixin(UserPassesTestMixin):
-    """Миксин для проверки авторства для доступа к действию."""
-
-    def test_func(self):
-        object = self.get_object()
-        return object.author == self.request.user
-
-    def handle_no_permission(self):
-        return redirect('blog:post_detail', pk=self.kwargs['pk'])
 
 
 class IndexListView(ListView):
@@ -33,10 +22,7 @@ class IndexListView(ListView):
     paginate_by = QNT_POSTS_ON_MAIN
 
     def get_queryset(self):
-        res = get_post_info(
-            self.model
-        ).order_by('-pub_date').annotate(comment_count=Count('comments'))
-        return res
+        return get_post_info(self.model)
 
 
 class PostDetailView(PermissionRequiredMixin, DetailView):
@@ -46,9 +32,11 @@ class PostDetailView(PermissionRequiredMixin, DetailView):
     template_name = 'blog/detail.html'
 
     def get_context_data(self, **kwargs):
-        context = super(PostDetailView, self).get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
         context['form'] = CommentForm()
-        context['comments'] = self.object.comments.all()
+        context['comments'] = (
+            self.object.comments.select_related('author').all()
+        )
         return context
 
     def has_permission(self):
@@ -74,7 +62,7 @@ class CategoryListView(ListView):
         )
         queryset = get_post_info(self.model).filter(
             category=self.current_category
-        ).order_by('-pub_date').annotate(comment_count=Count('comments'))
+        )
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -92,11 +80,12 @@ class ProfileListView(ListView):
 
     def get_queryset(self):
         self.user = get_object_or_404(User, username=self.kwargs['user_name'])
-        res = Post.objects.filter(
-            author=self.user
-        ).order_by('-pub_date').annotate(
-            comment_count=Count('comments')
-        )
+        res = get_post_info(
+            self.model,
+            apply_default_filters=False,
+        ).filter(author=self.user)
+        if self.request.user.username != self.user.username:
+            res = res.filter(pub_date__lt=now())
         return res
 
     def get_context_data(self, **kwargs):
@@ -105,7 +94,7 @@ class ProfileListView(ListView):
         return context
 
 
-class ProfileUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     """Класс представления для редактирования данных пользователя."""
 
     model = User
@@ -114,10 +103,6 @@ class ProfileUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
 
     def get_object(self, queryset=None):
         return self.request.user
-
-    def test_func(self):
-        profile_owner = self.get_object()
-        return self.request.user.username == profile_owner.username
 
     def get_success_url(self):
         res = reverse(
@@ -135,10 +120,7 @@ class PostCreateView(LoginRequiredMixin, CreateView):
     template_name = 'blog/create.html'
 
     def form_valid(self, form):
-        form.files = self.request.FILES
-        post = form.save(commit=False)
-        post.author = self.request.user
-        post.save()
+        form.instance.author = self.request.user
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -149,7 +131,7 @@ class PostCreateView(LoginRequiredMixin, CreateView):
         return res
 
 
-class PostUpdateView(OnlyAuthorMixin, UpdateView):
+class PostUpdateView(LoginRequiredMixin, OnlyAuthorMixin, UpdateView):
     """Класс представления редактирования публикации."""
 
     model = Post
@@ -160,7 +142,7 @@ class PostUpdateView(OnlyAuthorMixin, UpdateView):
         return reverse('blog:post_detail', kwargs={'pk': self.get_object().id})
 
 
-class PostDeleteView(OnlyAuthorMixin, DeleteView):
+class PostDeleteView(LoginRequiredMixin, OnlyAuthorMixin, DeleteView):
     """Класс представления удаления публикации."""
 
     model = Post
@@ -172,11 +154,7 @@ class PostDeleteView(OnlyAuthorMixin, DeleteView):
         post = self.get_object()
 
         form = PostForm(instance=post)
-        for field in form.fields:
-            form.fields[field].widget.attrs['disabled'] = True
-
         context['form'] = form
-        context['is_delete'] = True
         return context
 
     def get_success_url(self):
@@ -195,26 +173,26 @@ class CommentCreateView(LoginRequiredMixin, CreateView):
     template_name = 'blog/comment.html'
 
     def form_valid(self, form):
-        post = get_object_or_404(Post, pk=self.kwargs['pk'])
+        self.post = get_object_or_404(Post, pk=self.kwargs['pk'])
+        form.instance.post = self.post
+        form.instance.author = self.request.user
+        return super().form_valid(form)
 
-        comment = form.save(commit=False)
-        comment.post = post
-        comment.author = self.request.user
-        comment.save()
+    def get_success_url(self):
+        res = reverse(
+            'blog:post_detail',
+            kwargs={'pk': self.kwargs['pk']}
+        )
+        return res
 
-        return redirect('blog:post_detail', pk=post.pk)
 
-
-class CommentUpdateView(OnlyAuthorMixin, UpdateView):
+class CommentUpdateView(LoginRequiredMixin, OnlyAuthorMixin, UpdateView):
     """Класс представления редактирования комментария."""
 
     model = Comment
     form_class = CommentForm
     template_name = 'blog/comment.html'
-
-    def get_object(self, queryset=None):
-        res = get_object_or_404(Comment, pk=self.kwargs['comment_id'])
-        return res
+    pk_url_kwarg = 'comment_id'
 
     def get_success_url(self):
         res = reverse(
@@ -224,7 +202,7 @@ class CommentUpdateView(OnlyAuthorMixin, UpdateView):
         return res
 
 
-class CommentDeleteView(OnlyAuthorMixin, DeleteView):
+class CommentDeleteView(LoginRequiredMixin, OnlyAuthorMixin, DeleteView):
     """Класс представления удаления комментария."""
 
     model = Comment

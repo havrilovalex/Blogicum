@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.urls import reverse
 
 from constants import OBJ_NAME_LENGTH
 
@@ -101,6 +102,9 @@ class Post(PublishableModel):
     def __str__(self):
         return self.title[:OBJ_NAME_LENGTH]
 
+    def get_absolute_url(self):
+        return reverse('blog:post_detail', kwargs={'pk': self.pk})
+
 
 class Comment(PublishableModel):
     """Модель комментария."""
@@ -128,4 +132,8 @@ class Comment(PublishableModel):
         default_related_name = 'comments'
 
     def __str__(self):
-        return self.text[:OBJ_NAME_LENGTH]
+        res = (
+            f'Комментарий автора {self.author} к посту '
+            f'{self.post}: {self.text[:OBJ_NAME_LENGTH]}...'
+        )
+        return res

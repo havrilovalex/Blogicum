@@ -73,6 +73,7 @@ class CommentAdmin(admin.ModelAdmin):
     list_filter = ('post',)
     list_display_links = (short_version_text,)
 
+    @admin.display(description='Ссылка на пост')
     def link_to_post(self, obj):
         post = obj.post
         if post:
@@ -83,8 +84,7 @@ class CommentAdmin(admin.ModelAdmin):
             return format_html('<a href="{}">{}</a>', url, post)
         return "-"
 
-    link_to_post.short_description = "Ссылка на пост"
-
+    @admin.display(description='Ссылка на автора')
     def link_to_author(self, obj):
         author = obj.author
         if author:
@@ -94,5 +94,3 @@ class CommentAdmin(admin.ModelAdmin):
             )
             return format_html('<a href="{}">{}</a>', url, author)
         return "-"
-
-    link_to_author.short_description = "Ссылка на автора"
