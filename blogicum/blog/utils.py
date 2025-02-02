@@ -1,22 +1,11 @@
 from django.db.models import Count
 from django.utils.timezone import now
 
-
-# def get_post_info(post_model):
-#     res = post_model.objects.select_related(
-#         'category',
-#         'location',
-#         'author'
-#     ).filter(
-#         is_published=True,
-#         pub_date__lt=now(),
-#         category__is_published=True
-#     )
-#     return res
+from blog.models import Post
 
 
 def get_post_info(
-    post_model,
+    post_model=Post.objects,
     apply_default_filters=True,
     order_by_pub_date=True,
     annotate_comments=True
@@ -30,7 +19,7 @@ def get_post_info(
         order_by_pub_date: Отсортировать по `-pub_date` при True.
         annotate_comments: аннотация `comment_count` если True.
     """
-    queryset = post_model.objects.select_related(
+    queryset = post_model.select_related(
         'category', 'location', 'author')
 
     if apply_default_filters:

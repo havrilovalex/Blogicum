@@ -22,7 +22,7 @@ class IndexListView(ListView):
     paginate_by = QNT_POSTS_ON_MAIN
 
     def get_queryset(self):
-        return get_post_info(self.model)
+        return get_post_info()
 
 
 class PostDetailView(PermissionRequiredMixin, DetailView):
@@ -60,10 +60,7 @@ class CategoryListView(ListView):
             slug=self.kwargs['category_slug'],
             is_published=True
         )
-        queryset = get_post_info(self.model).filter(
-            category=self.current_category
-        )
-        return queryset
+        return get_post_info(self.current_category.posts.all())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -81,11 +78,9 @@ class ProfileListView(ListView):
     def get_queryset(self):
         self.user = get_object_or_404(User, username=self.kwargs['user_name'])
         res = get_post_info(
-            self.model,
-            apply_default_filters=False,
-        ).filter(author=self.user)
-        if self.request.user.username != self.user.username:
-            res = res.filter(pub_date__lt=now())
+            self.user.posts.all(),
+            apply_default_filters=self.request.user != self.user
+        )
         return res
 
     def get_context_data(self, **kwargs):
@@ -208,10 +203,7 @@ class CommentDeleteView(LoginRequiredMixin, OnlyAuthorMixin, DeleteView):
     model = Comment
     form_class = CommentForm
     template_name = 'blog/comment.html'
-
-    def get_object(self, queryset=None):
-        res = get_object_or_404(Comment, pk=self.kwargs['comment_id'])
-        return res
+    pk_url_kwarg = 'comment_id'
 
     def get_success_url(self):
         res = reverse(
